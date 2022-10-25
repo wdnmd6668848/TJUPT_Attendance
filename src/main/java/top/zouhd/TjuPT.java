@@ -5,15 +5,28 @@ import cn.hutool.http.*;
 import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpCookie;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
+import static cn.hutool.http.HttpUtil.createGet;
+
 public class TjuPT {
     private static final Log log = LogFactory.get();
+
+    public static final int SUCCESS = 0;
+    public static final int ALREADY_CHECKED_IN = 1;
+    public static final int NOT_FOUND_LOCAL_IMAGE = 2;
+    public static final int NETWORK_ERROR = 3;
     String tjuptUrl;
     Douban douban;
 
@@ -22,55 +35,65 @@ public class TjuPT {
         douban = new Douban();
     }
 
-    public void checkIn() {
+    public int checkIn() {
         HttpCookie cookie = connect();
         if (cookie == null) {
-            return;
+            return NETWORK_ERROR;
         }
         String html = Objects.requireNonNull(getRespose(cookie)).body();
+        // 已签到
         if (ReUtil.contains("今日已签到", html)) {
             String text = ReUtil.extractMulti("<p>今日已签到，已累计签到 <b>(\\d+)</b> 次，已连续签到 <b>(\\d+)</b> 天，今日获得了 <b>(\\d+)</b> 个魔力值。</p></td></tr></table>", html,
                     "今日已签到，已累计签到$1次，已连续签到$2天，今日获得了$3个魔力值。");
             log.info(text);
-            return;
+            return ALREADY_CHECKED_IN;
         }
-        // TODO 根据html获取签到链接
-        String captchaUrl = ReUtil.get("src=\"(captcha.php\\?\\d+)\"", html, 1);
-        List<String> options = ReUtil.findAll("value=\"(\\d+)\"", html, 1);
-//        String captchaUrl = "https://zouhd.top/images/ttt.jpeg";
-//        List<String> options = new ArrayList<>();
-//        options.add("独行月球");
-//        options.add("无间道");
-//        options.add("少年的你");
-//        options.add("大鱼海棠");
+        String captchaUrl = "https://tjupt.org" + ReUtil.get("src='(/pic/attend/\\d+-\\d+-\\d+/.*.jpg)'", html, 1);
+        List<String> options = ReUtil.findAll("<input type='radio' name='answer' value='\\d+-\\d+-\\d+.*?>(.*?)<", html, 1);
+        for (String option : options) {
+            log.info("选项：{}", option);
+        }
         int max_score = 0;
-        int count = 0;
-//        String ansUrl = "";
         String answer = "";
-        BMPLoader bmpLoader = new BMPLoader(captchaUrl);
+        InputStream in = HttpUtil.createGet(captchaUrl).cookie(cookie).execute().bodyStream();
+        BufferedImage image;
+        try {
+            image = ImageIO.read(in);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        BMPLoader bmpLoader = new BMPLoader(image);
         for (String option : options) {
 
-            List<String> doubanImgs = douban.getPics(option);
-
-            for (String doubanImg : doubanImgs) {
-
-                int score = bmpLoader.compareImage(doubanImg);
-                if (score > max_score) {
-                    max_score = score;
-                    answer = option;
-//                    ansUrl = doubanImg;
-                }
-//                log.info("{}分。{}正在识别豆瓣电影《{}》海报，地址：{}", score, ++count, option, doubanImg);
+//            List<String> doubanImgs = douban.getPics(option);
+            File file = new File("src/main/resources/images/" + option + ".jpg");
+            if (!file.exists()) {
+                log.error("本地图片{}不存在", option);
+                continue;
             }
+            BufferedImage localImag = null;
+            try {
+                localImag = ImageIO.read(file);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            int score = bmpLoader.compareImage(localImag);
+            if (score > max_score) {
+                max_score = score;
+                answer = option;
+            }
+            log.info("{}分。正在识别豆瓣电影《{}》海报，地址：{}", score, option);
         }
-        // TODO 分数过低则退出
-        if (max_score < 20) {
-            log.error("找不到匹配的图片，请手动签到！");
-            return;
+        // 最高分分数过低则退出
+        if (max_score < 60) {
+            log.error("找不到匹配的图片，刷新重试中......");
+            return NOT_FOUND_LOCAL_IMAGE;
         }
-        // 测试用，将文件写入本地
-//        bmpLoader.writeImg(ansUrl);
-        log.info("最佳匹配：" + answer + "，分数：" + max_score);
+        log.info("签到图片：{}", captchaUrl);
+        log.info("最佳匹配：{}, 分数：{}", answer, max_score);
+
+        String answerId = ReUtil.get("name='answer' value='(\\d+-\\d+-\\d+ \\d+:\\d+:\\d+&\\d+)'>" + answer + "<", html, 1);
 
 
         HttpRequest request = HttpUtil.createRequest(Method.POST, tjuptUrl + "attendance.php");
@@ -79,17 +102,20 @@ public class TjuPT {
                 .keepAlive(true)
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
                 .disableCache()
-                .form("captcha", answer);
+                .form("answer", answerId);
         HttpResponse response = request.execute();
         String finishCaptcha = response.body();
         // TODO 判断是否签到成功 修改正则表达式
         if (ReUtil.contains("签到成功", finishCaptcha)) {
-            String text = ReUtil.extractMulti("<p>签到成功，已累计签到 <b>(\\d+)</b> 次，已连续签到 <b>(\\d+)</b> 天，今日获得了 <b>(\\d+)</b> 个魔力值。</p></td></tr></table>", html,
+            String text = ReUtil.extractMulti("<p>签到成功，这是您的第 <b>(\\d+)</b> 次签到，已连续签到 <b>(\\d+)</b> 天，本次签到获得 <b>(\\d+)</b> 个魔力值。", html,
                     "签到成功，已累计签到$1次，已连续签到$2天，今日获得了$3个魔力值。");
             log.info(text);
         } else {
             log.error("签到失败");
+            return NETWORK_ERROR;
+
         }
+        return SUCCESS;
     }
 
     private HttpResponse getRespose(HttpCookie cookie) {
@@ -110,7 +136,6 @@ public class TjuPT {
     private HttpCookie connect() {
         Properties properties = new Properties();
         try {
-            // idea中运行时，使用路径 src/main/resources/config.properties
             InputStream in = App.class.getClassLoader().getResourceAsStream("src/main/resources/config.properties");
             properties.load(in);
         } catch (Exception e) {

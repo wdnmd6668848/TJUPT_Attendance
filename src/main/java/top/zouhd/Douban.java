@@ -17,11 +17,24 @@ public class Douban {
 
     public List<String> getPics(String name) {
         String searchUrl = DOUBAN_URL + name;
-        String result = HttpUtil.get(searchUrl);
+        String result = "";
+        for (int i = 0; i < 5; i++) {
+            result = HttpUtil.get(searchUrl);
+            if (result.length() >= 10) {
+                break;
+            }
+            log.error("豆瓣搜索结果为空: {}, 重试中", name);
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
         if (result.length() < 10) {
-            log.error("豆瓣搜索结果为空");
             return null;
         }
+
+
         String id = JSONUtil.parseArray(result).getJSONObject(0).getStr("id");
         String url = "https://movie.douban.com/subject/" + id + "/photos?type=R";
         String html = HttpUtil.get(url);

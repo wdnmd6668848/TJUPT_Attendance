@@ -16,9 +16,8 @@ public class BMPLoader {
 
     static String[][] list;
 
-    BMPLoader(String url) {
+    BMPLoader(BufferedImage image) {
         try {
-            BufferedImage image = ImageIO.read(new URL(url));
             width = image.getWidth();
             height = image.getHeight();
 
@@ -37,45 +36,22 @@ public class BMPLoader {
                 }
             }
         } catch (Exception e) {
+            e.printStackTrace();
             log.error("签到图片加载失败");
         }
     }
 
-    public void writeImg(String img) {
-        try {
-            BufferedImage image = ImageIO.read(new URL(img));
-            BufferedImage t = new BufferedImage(width, image.getHeight() * width / image.getWidth(), BufferedImage.TYPE_INT_RGB);
-            t.getGraphics().drawImage(image.getScaledInstance(t.getWidth(), t.getHeight(), BufferedImage.SCALE_SMOOTH), 0, 0, null);
-            ImageIO.write(t, "jpg", new File("/Users/zouhd/Desktop/best.jpg"));
-        } catch (Exception e) {
-            log.error("签到图片写入失败");
-        }
-    }
     // 改变成二进制码
-    public String[][] getPX(String img) {
+    public String[][] getPX(BufferedImage img) {
         int[] rgb = new int[3];
-        BufferedImage bi = null;
-        try {
-            URL url = new URL(img);
-            BufferedImage image = ImageIO.read(url);
-            if (width == 0 && height == 0) {
-                width = image.getWidth();
-                height = image.getHeight();
-            }
-            bi = new BufferedImage(width, image.getHeight() * width / image.getWidth(), BufferedImage.TYPE_INT_RGB);
-            bi.getGraphics().drawImage(image.getScaledInstance(bi.getWidth(), bi.getHeight(), BufferedImage.SCALE_SMOOTH), 0, 0, null);
-        } catch (Exception e) {
-            log.error("图片加载失败: {}", img);
-            return null;
-        }
-        int width = bi.getWidth();
-        int height = bi.getHeight();
-        int minx = bi.getMinX();
-        int miny = bi.getMinY();
+        int width = img.getWidth();
+        int height = img.getHeight();
+        int minx = img.getMinX();
+        int miny = img.getMinY();
         String[][] list = new String[width][height];
         for (int i = minx; i < width; i++) {
             for (int j = miny; j < height; j++) {
-                int pixel = bi.getRGB(i, j);
+                int pixel = img.getRGB(i, j);
                 rgb[0] = (pixel & 0xff0000) >> 16;
                 rgb[1] = (pixel & 0xff00) >> 8;
                 rgb[2] = (pixel & 0xff);
@@ -87,7 +63,7 @@ public class BMPLoader {
 
     }
 
-    public int compareImage(String img) {
+    public int compareImage(BufferedImage img) {
 
         if (null == img) {
             return 0;
