@@ -16,7 +16,7 @@ public class App {
         TjuPT pt = new TjuPT();
         int code = 4;
         int retry = 0;
-        for (; retry < 2; retry++) {
+        for (; retry < 10; retry++) {
             // 0 为签到成功，1 为已签到，2 为未找到本地图片，3 为网络故障，4 为未知错误
             code = pt.checkIn();
             if (code == TjuPT.NOT_FOUND_LOCAL_IMAGE || code == TjuPT.NETWORK_ERROR) {
