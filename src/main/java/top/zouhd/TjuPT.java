@@ -7,10 +7,7 @@ import cn.hutool.log.LogFactory;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.HttpCookie;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -27,20 +24,46 @@ public class TjuPT {
     public static final int ALREADY_CHECKED_IN = 1;
     public static final int NOT_FOUND_LOCAL_IMAGE = 2;
     public static final int NETWORK_ERROR = 3;
+    public static final int UNKNOWN_ERROR = 4;
     String tjuptUrl;
-    Douban douban;
+
+    Properties properties;
 
     TjuPT() {
         tjuptUrl = "https://tjupt.org/";
-        douban = new Douban();
+        properties = new Properties();
+        try {
+            InputStream in = App.class.getClassLoader().getResourceAsStream("src/main/resources/config.properties");
+            properties.load(in);
+        } catch (Exception e) {
+            e.printStackTrace();
+            log.error("读取配置文件失败");
+        }
     }
 
     public int checkIn() {
-        HttpCookie cookie = connect();
+        HttpCookie cookie;
+        if (properties.getProperty("cookie_hasExpired") != null && properties.getProperty("cookie_hasExpired").equals("false")) {
+            cookie = new HttpCookie(properties.getProperty("cookie_name"), properties.getProperty("cookie_value"));
+            cookie.setPath(properties.getProperty("cookie_path"));
+            cookie.setDomain(properties.getProperty("cookie_domain"));
+            cookie.setVersion(Integer.parseInt(properties.getProperty("cookie_version")));
+            cookie.setDomain(properties.getProperty("cookie_domain"));
+            cookie.setHttpOnly(Boolean.parseBoolean(properties.getProperty("cookie_http_only")));
+            cookie.setSecure(Boolean.parseBoolean(properties.getProperty("cookie_secure")));
+        } else {
+            cookie = connect();
+        }
         if (cookie == null) {
+            expireCookie(properties);
             return NETWORK_ERROR;
         }
-        String html = Objects.requireNonNull(getRespose(cookie)).body();
+        HttpResponse resp = getRespose(cookie);
+        if (resp == null) {
+            expireCookie(properties);
+            return NETWORK_ERROR;
+        }
+        String html = resp.body();
         // 已签到
         if (ReUtil.contains("今日已签到", html)) {
             String text = ReUtil.extractMulti("<p>今日已签到，已累计签到 <b>(\\d+)</b> 次，已连续签到 <b>(\\d+)</b> 天，今日获得了 <b>(\\d+)</b> 个魔力值。</p></td></tr></table>", html,
@@ -105,13 +128,13 @@ public class TjuPT {
                 .form("answer", answerId);
         HttpResponse response = request.execute();
         String finishCaptcha = response.body();
-        // TODO 判断是否签到成功 修改正则表达式
         if (ReUtil.contains("签到成功", finishCaptcha)) {
             String text = ReUtil.extractMulti("<p>签到成功，这是您的第 <b>(\\d+)</b> 次签到，已连续签到 <b>(\\d+)</b> 天，本次签到获得 <b>(\\d+)</b> 个魔力值。", html,
                     "签到成功，已累计签到$1次，已连续签到$2天，今日获得了$3个魔力值。");
             log.info(text);
         } else {
             log.error("签到失败");
+            expireCookie(properties);
             return NETWORK_ERROR;
 
         }
@@ -149,6 +172,7 @@ public class TjuPT {
         request.setFollowRedirects(false)
                 .form("username", username)
                 .form("password", password)
+                .form("logout", "90days")
                 .keepAlive(true)
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
                 .disableCache();
@@ -162,8 +186,34 @@ public class TjuPT {
             return null;
         }
         log.info("登录成功");
-        return response.getCookie("access_token");
+        HttpCookie cookie = response.getCookie("access_token");
+        properties.setProperty("cookie_name", cookie.getName());
+        properties.setProperty("cookie_value", cookie.getValue());
+        properties.setProperty("cookie_domain", cookie.getDomain());
+        properties.setProperty("cookie_path", cookie.getPath());
+        properties.setProperty("cookie_expires", cookie.getMaxAge() + "");
+        properties.setProperty("cookie_secure", cookie.getSecure() + "");
+        properties.setProperty("cookie_httpOnly", cookie.isHttpOnly() + "");
+        properties.setProperty("cookie_version", cookie.getVersion() + "");
+        properties.setProperty("cookie_hasExpired", cookie.hasExpired() + "");
+        try {
+            properties.store(new BufferedOutputStream(Files.newOutputStream(Paths.get("src/main/resources/config.properties"))), "Store Cookie");
+            log.info("access_token已保存，有效期：{}天", cookie.getMaxAge() / 60 / 60 / 24);
+        } catch (IOException e) {
+            log.error("access_token保存失败");
+        }
+        return cookie;
 
+    }
+
+    private void expireCookie(Properties properties) {
+        properties.setProperty("cookie_hasExpired", "true");
+        try {
+            properties.store(new BufferedWriter(new FileWriter("src/main/resources/config.properties")), "cookie");
+            log.info("Cookie已手动过期");
+        } catch (IOException e) {
+            log.info("Cookie过期失败");
+        }
     }
 
 }
