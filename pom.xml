@@ -38,6 +38,7 @@
             <resource>
                 <directory>src/main/resources</directory>
                 <includes>
+                    <include>**/images/*.jpg</include>
                     <include>**/*.properties</include>
                 </includes>
                 <targetPath>src/main/resources</targetPath>
