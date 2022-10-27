@@ -20,6 +20,6 @@ public class AppTest
     @Test
     public void shouldAnswerWithTrue()
     {
-        pushDeer.send("测试发送消息！");
+        pushDeer.send("测试发送消息！%0A 你好");
     }
 }

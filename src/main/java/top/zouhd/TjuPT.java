@@ -73,7 +73,7 @@ public class TjuPT {
                     "今日已签到，已累计签到$1次，已连续签到$2天，今日获得了$3个魔力值。");
             text += ReUtil.extractMulti("茉莉园</a>\\]: ((\\d+,)+\\d+\\.\\d+)", html, "当前拥有$1魔力值。");
             log.info(text);
-            pushDeer.send("今日已签到\n" + text);
+            pushDeer.send("今日已签到%0A" + text);
             return ALREADY_CHECKED_IN;
         }
         String captchaUrl = "https://tjupt.org" + ReUtil.get("src='(/pic/attend/\\d+-\\d+-\\d+/.*.jpg)'", html, 1);
@@ -150,7 +150,7 @@ public class TjuPT {
 //            return NETWORK_ERROR;
 //
 //        }
-        pushDeer.send("签到成功\n" + answer);
+        pushDeer.send("签到成功%0A" + answer);
         return SUCCESS;
     }
 
