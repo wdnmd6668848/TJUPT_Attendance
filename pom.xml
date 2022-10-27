@@ -5,8 +5,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>top.zouhd</groupId>
-    <artifactId>autoattendance-tjupt</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <artifactId>tjupt-attendance</artifactId>
+    <version>0.1</version>
 
     <name>autoattendance-tjupt</name>
 
