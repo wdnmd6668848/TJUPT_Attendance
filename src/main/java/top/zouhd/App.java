@@ -1,17 +1,9 @@
 package top.zouhd;
 
-import cn.hutool.log.Log;
-import cn.hutool.log.LogFactory;
-
-import java.io.InputStream;
-import java.util.Properties;
-
 /**
  * Hello world!
  */
 public class App {
-    private static final Log log = LogFactory.get();
-
     public static void main(String[] args) {
         TjuPT pt = new TjuPT();
         int code = 4;
@@ -34,6 +26,5 @@ public class App {
             pushDeer.send("签到失败%0A重试次数" + retry + "，请查看具体日志");
         }
     }
-
 
 }

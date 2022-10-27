@@ -2,10 +2,6 @@ package top.zouhd;
 
 import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
-
-import java.io.File;
-import java.net.URL;
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 
 public class BMPLoader {

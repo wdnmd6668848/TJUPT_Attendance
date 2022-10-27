@@ -9,13 +9,10 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.HttpCookie;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
-
-import static cn.hutool.http.HttpUtil.createGet;
 
 public class TjuPT {
     private static final Log log = LogFactory.get();
@@ -46,7 +43,8 @@ public class TjuPT {
 
     public int checkIn() {
         HttpCookie cookie;
-        if (properties.getProperty("cookie_hasExpired") != null && properties.getProperty("cookie_hasExpired").equals("false")) {
+        if (properties.getProperty("cookie_hasExpired") != null
+                && properties.getProperty("cookie_hasExpired").equals("false")) {
             cookie = new HttpCookie(properties.getProperty("cookie_name"), properties.getProperty("cookie_value"));
             cookie.setPath(properties.getProperty("cookie_path"));
             cookie.setDomain(properties.getProperty("cookie_domain"));
@@ -69,7 +67,9 @@ public class TjuPT {
         String html = resp.body();
         // 已签到
         if (ReUtil.contains("今日已签到", html)) {
-            String text = ReUtil.extractMulti("<p>今日已签到，已累计签到 <b>(\\d+)</b> 次，已连续签到 <b>(\\d+)</b> 天，今日获得了 <b>(\\d+)</b> 个魔力值。</p></td></tr></table>", html,
+            String text = ReUtil.extractMulti(
+                    "<p>今日已签到，已累计签到 <b>(\\d+)</b> 次，已连续签到 <b>(\\d+)</b> 天，今日获得了 <b>(\\d+)</b> 个魔力值。</p></td></tr></table>",
+                    html,
                     "今日已签到，已累计签到$1次，已连续签到$2天，今日获得了$3个魔力值。");
             text += ReUtil.extractMulti("茉莉园</a>\\]: ((\\d+,)+\\d+\\.\\d+)", html, "当前拥有$1魔力值。");
             log.info(text);
@@ -78,7 +78,8 @@ public class TjuPT {
         }
         String captchaUrl = "https://tjupt.org" + ReUtil.get("src='(/pic/attend/\\d+-\\d+-\\d+/.*.jpg)'", html, 1);
         log.info("签到图片：{}", captchaUrl);
-        List<String> options = ReUtil.findAll("<input type='radio' name='answer' value='\\d+-\\d+-\\d+.*?>(.*?)<", html, 1);
+        List<String> options = ReUtil.findAll("<input type='radio' name='answer' value='\\d+-\\d+-\\d+.*?>(.*?)<", html,
+                1);
         StringBuilder optionText = new StringBuilder();
         for (String option : options) {
             optionText.append(option).append(",");
@@ -99,7 +100,7 @@ public class TjuPT {
         BMPLoader bmpLoader = new BMPLoader(image);
         for (String option : options) {
 
-//            List<String> doubanImgs = douban.getPics(option);
+            // List<String> doubanImgs = douban.getPics(option);
             URL imgURL = App.class.getClassLoader().getResource("src/main/resources/images/" + option + ".jpg");
             if (imgURL == null) {
                 log.error("未找到本地图片：{}", option);
@@ -117,7 +118,7 @@ public class TjuPT {
                 max_score = score;
                 answer = option;
             }
-//            log.info("{}分。正在识别电影《{}》海报", score, option);
+            // log.info("{}分。正在识别电影《{}》海报", score, option);
         }
         // 最高分分数过低则退出
         if (max_score < 60) {
@@ -126,30 +127,32 @@ public class TjuPT {
         }
         log.info("最佳匹配：{}, 分数：{}", answer, max_score);
 
-        String answerId = ReUtil.get("name='answer' value='(\\d+-\\d+-\\d+ \\d+:\\d+:\\d+&\\d+)'>" + answer + "<", html, 1);
+        String answerId = ReUtil.get("name='answer' value='(\\d+-\\d+-\\d+ \\d+:\\d+:\\d+&\\d+)'>" + answer + "<", html,
+                1);
 
+        HttpRequest request = HttpUtil.createRequest(Method.POST, tjuptUrl + "attendance.php");
+        request.setFollowRedirects(true)
+                .cookie(cookie)
+                .keepAlive(true)
+                .header("Accept",
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
+                .disableCache()
+                .form("answer", answerId);
+        HttpResponse response = request.execute();
+        String finishCaptcha = response.body();
+        String text = "";
+        if (ReUtil.contains("签到成功", finishCaptcha)) {
+            text = ReUtil.extractMulti(
+                    "<p>签到成功，这是您的第 <b>(\\d+)</b> 次签到，已连续签到 <b>(\\d+)</b> 天，本次签到获得 <b>(\\d+)</b> 个魔力值。", html,
+                    "签到成功，已累计签到$1次，已连续签到$2天，今日获得了$3个魔力值。");
+            text += ReUtil.extractMulti("茉莉园</a>\\]: ((\\d+,)+\\d+\\.\\d+)", html, "当前拥有$1魔力值。");
+            log.info(text);
+        } else {
+            log.error("签到失败");
+            expireCookie(properties);
+            return NETWORK_ERROR;
 
-//        HttpRequest request = HttpUtil.createRequest(Method.POST, tjuptUrl + "attendance.php");
-//        request.setFollowRedirects(true)
-//                .cookie(cookie)
-//                .keepAlive(true)
-//                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
-//                .disableCache()
-//                .form("answer", answerId);
-//        HttpResponse response = request.execute();
-//        String finishCaptcha = response.body();
-//        String text = "";
-//        if (ReUtil.contains("签到成功", finishCaptcha)) {
-//             text = ReUtil.extractMulti("<p>签到成功，这是您的第 <b>(\\d+)</b> 次签到，已连续签到 <b>(\\d+)</b> 天，本次签到获得 <b>(\\d+)</b> 个魔力值。", html,
-//                    "签到成功，已累计签到$1次，已连续签到$2天，今日获得了$3个魔力值。");
-//             text += ReUtil.extractMulti("茉莉园</a>\\]: ((\\d+,)+\\d+\\.\\d+)", html, "当前拥有$1魔力值。");
-//            log.info(text);
-//        } else {
-//            log.error("签到失败");
-//            expireCookie(properties);
-//            return NETWORK_ERROR;
-//
-//        }
+        }
         pushDeer.send("签到成功%0A" + answer);
         return SUCCESS;
     }
@@ -159,7 +162,8 @@ public class TjuPT {
         request.setFollowRedirects(true)
                 .cookie(cookie)
                 .keepAlive(true)
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
+                .header("Accept",
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
                 .disableCache();
         HttpResponse response = request.execute();
         if (response.getStatus() != 200) {
@@ -187,7 +191,8 @@ public class TjuPT {
                 .form("password", password)
                 .form("logout", "90days")
                 .keepAlive(true)
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
+                .header("Accept",
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
                 .disableCache();
         HttpResponse response = request.execute();
         if (response.getStatus() != 302) {
@@ -210,7 +215,9 @@ public class TjuPT {
         properties.setProperty("cookie_version", cookie.getVersion() + "");
         properties.setProperty("cookie_hasExpired", cookie.hasExpired() + "");
         try {
-            properties.store(new BufferedOutputStream(Files.newOutputStream(Paths.get("src/main/resources/config.properties"))), "Store Cookie");
+            properties.store(
+                    new BufferedOutputStream(Files.newOutputStream(Paths.get("src/main/resources/config.properties"))),
+                    "Store Cookie");
             log.info("access_token已保存，有效期：{}天", cookie.getMaxAge() / 60 / 60 / 24 + 1);
         } catch (IOException e) {
             log.error("access_token保存失败");

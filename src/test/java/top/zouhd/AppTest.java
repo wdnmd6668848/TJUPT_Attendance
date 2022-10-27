@@ -1,12 +1,6 @@
 package top.zouhd;
 
-import static org.junit.Assert.assertTrue;
-
-import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
-
-import java.io.IOException;
 
 /**
  * Unit test for simple App.
@@ -20,6 +14,6 @@ public class AppTest
     @Test
     public void shouldAnswerWithTrue()
     {
-        pushDeer.send("测试发送消息！%0A 你好");
+        pushDeer.send("【北洋园】测试发送消息！%0A 你好");
     }
 }
